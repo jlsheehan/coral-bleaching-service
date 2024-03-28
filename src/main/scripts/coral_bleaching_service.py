@@ -8,20 +8,20 @@ from json import JSONEncoder
 from typing import Annotated, List, Optional
 
 import PIL.Image
-import cv2
+# import cv2
 # from coral_bleaching_segmentation import SegmentAnythingClassifier, Segment
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy
 import numpy as np
 from coral_bleaching_common import (
     Image,
-    Segment, Survey,
+    Segment, Survey, Point,
 )
 from coral_bleaching_db import (
     get_segment_repo,
     SegmentRepository,
     get_image_repo,
-    ImageRepository, get_survey_repo, SurveyRepository,
+    ImageRepository, get_survey_repo, SurveyRepository, PointRepository, get_point_repo,
 )
 from fastapi import FastAPI, UploadFile, Depends, status, Form, File
 from fastapi.exceptions import HTTPException
@@ -116,6 +116,17 @@ class NumpyArrayEncoder(JSONEncoder):
 # async def shutdown_event():
 #     sam.close()
 
+@app.get(
+    "/surveys/{survey_id}/images",
+)
+def get_survey_images(
+        survey_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        image_repo: ImageRepository = Depends(get_image_repo),
+) -> List[Image]:
+    images: List[Image] = image_repo.find_survey_images(survey_id)
+    return images
+
 
 @app.post(
     "/images",
@@ -177,6 +188,18 @@ def get_image_file(
         return Response(image_bytes.getvalue(), media_type="image/jpg")
 
 
+@app.get(
+    "/images/{image_id}/points",
+)
+def get_image_points(
+        image_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        point_repo: PointRepository = Depends(get_point_repo),
+) -> List[Point]:
+    points: List[Point] = point_repo.find_image_points(image_id)
+    return points
+
+
 # @app.post("/work")
 # def create_work_item(
 #         work_request: WorkItemRequest,
@@ -221,55 +244,55 @@ def get_image_file(
 #         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@app.get("/segments/{segment_id}/maskold")
-def get_segment_mask(
-        segment_id: str,
-        include_image: Optional[str] = "false",
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repository: SegmentRepository = Depends(get_segment_repo),
-        image_repository: ImageRepository = Depends(get_image_repo),
-):
-    segment: Segment = segment_repository.find(segment_id)
-    image: Image = image_repository.find(segment.image_id)
-    with image_repository.storage() as image_store:
-        image_file = image_store.import_from_storage(image)
-        # image_bytes = image_store.import_bytes_from_storage(image)
-        # cv2_image = cv2.imdecode(np.frombuffer(image_bytes.getvalue()))
-        cv2_image = cv2.imread(image_file)
-    with segment_repository.storage() as segment_store:
-        coords = segment_store.import_from_storage(segment)
-        mask_array = numpy.zeros((image.width, image.height), dtype=int)
-        mask_array[coords] = 1
-
-    # if im is None:
-    #     print("No image provided, only showing mask")
-    # else:
-    #     plt.figure()
-    #     plt.imshow(im)
-    plt.figure()
-    plt.imshow(cv2_image)
-    logger.debug("AAAAAAAAAAAAAAAAAAAAAAA")
-    # sorted_mask_array = sorted(mask_array, key=(lambda x: x["area"]), reverse=True)
-    ax = plt.gca()
-    ax.set_autoscale_on(False)
-    logger.debug("BBBBBBBBBBBBBBBBBBBBBBBBB")
-    img = np.ones((image.width, image.height, 4))
-    img[:, :, 3] = 0
-    color_mask = np.concatenate([np.random.random(3), [0.35]])
-    logger.debug("CCCCCC, %s", datetime.now())
-    img[mask_array] = color_mask
-    logger.debug("DDDDDDDDDDDDDD, %s", datetime.now())
-    ax.imshow(img)
-    # plt.show()
-    plt.axis("off")
-    # plt.show()
-    png_bytes = BytesIO()
-    plt.savefig(png_bytes, format="png")
-    png_bytes.seek(0)
-    # with open("blah.png", "rb") as blah:
-    #     png_bytes.write(blah.read())
-    logger.debug("============================")
-    return Response(png_bytes.getvalue(), media_type="image/png")
+# @app.get("/segments/{segment_id}/maskold")
+# def get_segment_mask(
+#         segment_id: str,
+#         include_image: Optional[str] = "false",
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repository: SegmentRepository = Depends(get_segment_repo),
+#         image_repository: ImageRepository = Depends(get_image_repo),
+# ):
+#     segment: Segment = segment_repository.find(segment_id)
+#     image: Image = image_repository.find(segment.image_id)
+#     with image_repository.storage() as image_store:
+#         image_file = image_store.import_from_storage(image)
+#         # image_bytes = image_store.import_bytes_from_storage(image)
+#         # cv2_image = cv2.imdecode(np.frombuffer(image_bytes.getvalue()))
+#         cv2_image = cv2.imread(image_file)
+#     with segment_repository.storage() as segment_store:
+#         coords = segment_store.import_from_storage(segment)
+#         mask_array = numpy.zeros((image.width, image.height), dtype=int)
+#         mask_array[coords] = 1
+#
+#     # if im is None:
+#     #     print("No image provided, only showing mask")
+#     # else:
+#     #     plt.figure()
+#     #     plt.imshow(im)
+#     plt.figure()
+#     plt.imshow(cv2_image)
+#     logger.debug("AAAAAAAAAAAAAAAAAAAAAAA")
+#     # sorted_mask_array = sorted(mask_array, key=(lambda x: x["area"]), reverse=True)
+#     ax = plt.gca()
+#     ax.set_autoscale_on(False)
+#     logger.debug("BBBBBBBBBBBBBBBBBBBBBBBBB")
+#     img = np.ones((image.width, image.height, 4))
+#     img[:, :, 3] = 0
+#     color_mask = np.concatenate([np.random.random(3), [0.35]])
+#     logger.debug("CCCCCC, %s", datetime.now())
+#     img[mask_array] = color_mask
+#     logger.debug("DDDDDDDDDDDDDD, %s", datetime.now())
+#     ax.imshow(img)
+#     # plt.show()
+#     plt.axis("off")
+#     # plt.show()
+#     png_bytes = BytesIO()
+#     plt.savefig(png_bytes, format="png")
+#     png_bytes.seek(0)
+#     # with open("blah.png", "rb") as blah:
+#     #     png_bytes.write(blah.read())
+#     logger.debug("============================")
+#     return Response(png_bytes.getvalue(), media_type="image/png")
 
 
 @app.get("/segments/{segment_id}/mask")
