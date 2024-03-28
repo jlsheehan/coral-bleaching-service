@@ -2,12 +2,15 @@ import logging
 from io import BytesIO
 from random import random, randint
 
-import PIL
+from PIL.Image import Image as PILImage
+
+# import PIL
 
 logger = logging.getLogger(__name__)
 
 
-def add_mask(pil_image: PIL.Image, mask_coords):
+def add_mask(pil_image: PILImage, mask_coords):
+    logger.debug("IM is %s", pil_image.im)
     if pil_image.mode != 'RGBA':
         pil_image_copy = pil_image.convert("RGBA")
     else:
@@ -21,7 +24,7 @@ def add_mask(pil_image: PIL.Image, mask_coords):
     return pil_image_copy
 
 
-def add_masks(pil_image: PIL.Image, mask_coords_list):
+def add_masks(pil_image: PILImage, mask_coords_list):
     pil_image_copy = pil_image.convert("RGBA")
     for mask_coords in mask_coords_list:
         pil_image_copy = add_mask(pil_image_copy, mask_coords)

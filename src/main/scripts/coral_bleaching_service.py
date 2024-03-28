@@ -131,11 +131,24 @@ def create_image(
         image_temp_file = os.path.join(storage.temp_dir, image_file.filename)
         with open(image_temp_file, "wb") as t:
             t.write(image_file.file.read())
-        image: Image = Image.from_image_file(image_temp_file, survey_id=survey_id)
+        image: Image = from_image_file(image_temp_file, survey_id=survey_id)
         image_repo.save(image)
         storage.export_to_storage(image, image_temp_file)
         return image
 
+
+def from_image_file(image_file_path, survey_id, image_id=None):
+    if os.path.exists(image_file_path):
+        image_name = os.path.basename(image_file_path)
+        with PIL.Image.open(image_file_path) as image:
+            width, height = image.size
+            return Image(
+                id=(image_id or str(uuid.uuid4())),
+                image_name=image_name,
+                survey_id=survey_id,
+                width=width,
+                height=height,
+            )
 
 @app.get(
     "/images/{image_id}",
