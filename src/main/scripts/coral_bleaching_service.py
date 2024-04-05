@@ -15,13 +15,13 @@ import numpy
 import numpy as np
 from coral_bleaching_common import (
     Image,
-    Segment, Survey,
+    Segment, Survey, Point,
 )
 from coral_bleaching_db import (
     get_segment_repo,
     SegmentRepository,
     get_image_repo,
-    ImageRepository, get_survey_repo, SurveyRepository,
+    ImageRepository, get_survey_repo, SurveyRepository, get_point_repo, PointRepository,
 )
 from fastapi import FastAPI, UploadFile, Depends, status, Form, File
 from fastapi.exceptions import HTTPException
@@ -29,7 +29,7 @@ from fastapi.responses import Response
 from fastapi.security import APIKeyHeader
 from mangum import Mangum
 
-from coral_bleaching_image import add_mask
+from coral_bleaching_image import add_mask, load_image_and_crop
 
 API_KEYS = [
     "af2e03df7efe4bb198d08b75f277f377",
@@ -165,7 +165,7 @@ def get_image(
 @app.get(
     "/images/{image_id}/jpeg",
 )
-def get_image_file(
+def get_image_jpeg(
         image_id: str,
         valid_api_key: str = Depends(valid_api_key),
         image_repo: ImageRepository = Depends(get_image_repo),
@@ -176,6 +176,65 @@ def get_image_file(
         image_bytes: BytesIO = storage.import_bytes_from_storage(image)
         return Response(image_bytes.getvalue(), media_type="image/jpg")
 
+
+@app.get(
+    "/images/{image_id}/points",
+)
+def get_image_points(
+        image_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        point_repository: PointRepository = Depends(get_point_repo),
+) -> List[Point]:
+    points: List[Point] = point_repository.find_image_points(image_id)
+    return points
+
+
+@app.get(
+    "/projects/{project_name}/surveys",
+)
+def get_project_surveys(
+        project_name: str,
+        valid_api_key: str = Depends(valid_api_key),
+        survey_repository: SurveyRepository = Depends(get_survey_repo),
+) -> List[Survey]:
+    surveys: List[Survey] = survey_repository.find_project_surveys(project_name)
+    return surveys
+
+
+@app.get(
+    "/surveys/{survey_id}",
+)
+def get_survey(
+        survey_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        survey_repo: SurveyRepository = Depends(get_survey_repo),
+) -> Survey:
+    survey: Survey = survey_repo.find(survey_id)
+    return survey
+
+
+@app.get(
+    "/points/{point_id}",
+)
+def get_survey(
+        point_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        point_repo: PointRepository = Depends(get_point_repo),
+) -> Point:
+    point: Point = point_repo.find(point_id)
+    return point
+
+
+@app.get(
+    "/surveys/{survey_id}/images",
+)
+def get_images_for_survey(
+        survey_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        image_repo: ImageRepository = Depends(get_image_repo),
+) -> List[Image]:
+    images: List[Image] = image_repo.find_survey_images(survey_id)
+    return images
 
 # @app.post("/work")
 # def create_work_item(
@@ -295,6 +354,26 @@ def get_segment_mask2(
                 return Response(masked_pil_image_bytes.getvalue(), media_type="image/png")
 
 
+@app.get("/points/{point_id}/patch")
+def get_patch(
+        point_id: str,
+        valid_api_key: str = Depends(valid_api_key),
+        point_repository: PointRepository = Depends(get_point_repo),
+        image_repository: ImageRepository = Depends(get_image_repo),
+):
+    point: Point = point_repository.find(point_id)
+    image: Image = image_repository.find(point.image_id)
+    with image_repository.storage() as image_store:
+        image_file = image_store.import_from_storage(image)
+        shutil.copy(image_file, f"C:\\Users\\jlsheeha\\Pictures\\{image.image_name}.jpg")
+        # with PIL.Image.open(image_file) as pil_image:
+        #     logger.debug(f"Image size: {pil_image}")
+        patch = load_image_and_crop(image_file, point.coordinate[0], point.coordinate[1])
+        patch_bytes = BytesIO()
+        patch.save(patch_bytes, format="JPEG")
+        return Response(patch_bytes.getvalue(), media_type="image/jpeg")
+
+
 @app.get("/images/{image_id}/mask")
 def get_segment_mask2(
         image_id: str,
@@ -386,7 +465,7 @@ def get_segment(
 
 
 @app.get("/images/{image_id}/segments")
-def get_segments(
+def get_image_segments(
         image_id: str,
         valid_api_key: str = Depends(valid_api_key),
         segment_repo: SegmentRepository = Depends(get_segment_repo),
@@ -411,26 +490,26 @@ handler = Mangum(app)
 #     return points
 
 
-@app.get("/images/{image_id}/segments")
-def sample_points(
-        image_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repo: SegmentRepository = Depends(get_segment_repo),
-):
-    logger.debug("Searching for segments for image: %s", image_id)
-    segments = segment_repo.find_image_segments(image_id)
-    return segments
+# @app.get("/images/{image_id}/segments")
+# def sample_points(
+#         image_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repo: SegmentRepository = Depends(get_segment_repo),
+# ):
+#     logger.debug("Searching for segments for image: %s", image_id)
+#     segments = segment_repo.find_image_segments(image_id)
+#     return segments
 
 
-@app.get("/surveys/{survey_id}")
-def get_segment(
-        survey_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        survey_repo: SurveyRepository = Depends(get_survey_repo),
-):
-    logger.debug("Getting survey: %s", survey_id)
-    survey: Survey = survey_repo.find(survey_id)
-    return survey
+# @app.get("/segments/{segment_id}")
+# def get_segment(
+#         segment_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         survey_repo: SurveyRepository = Depends(get_survey_repo),
+# ):
+#     logger.debug("Getting survey: %s", survey_id)
+#     survey: Survey = survey_repo.find(survey_id)
+#     return survey
 
 
 @app.post("/surveys")

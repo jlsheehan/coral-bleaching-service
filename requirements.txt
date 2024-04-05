@@ -1,4 +1,4 @@
-coral-bleaching-common==1.0.8
+coral-bleaching-common==1.0.9
 matplotlib==3.8.3
 fastapi==0.103.2
 python-multipart==0.0.9
