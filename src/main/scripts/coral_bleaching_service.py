@@ -1,41 +1,13 @@
 import logging
 import os
-import shutil
-import uuid
-from datetime import datetime
-from io import BytesIO
-from json import JSONEncoder
-from typing import Annotated, List, Optional
 
-import PIL.Image
 # import cv2
 # from coral_bleaching_segmentation import SegmentAnythingClassifier, Segment
 # import matplotlib.pyplot as plt
-import numpy
-import numpy as np
-from coral_bleaching_common import (
-    Image,
-    Segment, Survey, Point,
-)
-from coral_bleaching_db import (
-    get_segment_repo,
-    SegmentRepository,
-    get_image_repo,
-    ImageRepository, get_survey_repo, SurveyRepository, get_point_repo, PointRepository,
-)
-from fastapi import FastAPI, UploadFile, Depends, status, Form, File
-from fastapi.exceptions import HTTPException
-from fastapi.responses import Response
-from fastapi.security import APIKeyHeader
-from mangum import Mangum
+from fastapi import FastAPI
 
-from coral_bleaching_image import add_mask, load_image_and_crop
+from coral_bleaching_endpoint import images, points, segments, surveys
 
-API_KEYS = [
-    "af2e03df7efe4bb198d08b75f277f377",
-    "c17ee96ee97e49669561c0db7599a281",
-    "ffc6541942f44e89a742f315c19eb51e",
-]
 TRUE_STRINGS = ["true", "TRUE", "True", "yes", "YES", "Yes", "1"]
 CORAL_BLEACHING_DATA_BUCKET = os.getenv(
     "CORAL_BLEACHING_BUCKET", "coral-bleaching-data"
@@ -55,28 +27,30 @@ logger = logging.getLogger(__name__)
 
 
 app = FastAPI()
-api_key_header = APIKeyHeader(name="x-api-key")
+app.include_router(images.router)
+app.include_router(points.router)
+app.include_router(segments.router)
+app.include_router(surveys.router)
+
+# def valid_api_key(api_key: str = Depends(api_key_header)):
+#     if api_key in API_KEYS:
+#         return True
+#     else:
+#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
-def valid_api_key(api_key: str = Depends(api_key_header)):
-    if api_key in API_KEYS:
-        return True
-    else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-
-
-class NumpyArrayEncoder(JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, Segment):
-            return obj.dict()
-        else:
-            return JSONEncoder.default(self, obj)
+# class NumpyArrayEncoder(JSONEncoder):
+#     def default(self, obj):
+#         if isinstance(obj, np.integer):
+#             return int(obj)
+#         elif isinstance(obj, np.floating):
+#             return float(obj)
+#         elif isinstance(obj, np.ndarray):
+#             return obj.tolist()
+#         elif isinstance(obj, Segment):
+#             return obj.dict()
+#         else:
+#             return JSONEncoder.default(self, obj)
 
 
 # class SegmentAnythingListResponse(JSONResponse):
@@ -116,136 +90,124 @@ class NumpyArrayEncoder(JSONEncoder):
 # async def shutdown_event():
 #     sam.close()
 
-@app.get(
-    "/surveys/{survey_id}/images",
-)
-def get_survey_images(
-        survey_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> List[Image]:
-    images: List[Image] = image_repo.find_survey_images(survey_id)
-    return images
+# @app.post(
+#     "/images",
+# )
+# def create_image(
+#         image_file: Annotated[UploadFile, File()],
+#         survey_id: Annotated[str, Form()],
+#         valid_api_key: str = Depends(valid_api_key),
+#         image_repo: ImageRepository = Depends(get_image_repo),
+# ) -> Image:
+#     logger.debug("Got file: %s", image_file.filename)
+#     with image_repo.storage() as storage:
+#         image_temp_file = os.path.join(storage.temp_dir, image_file.filename)
+#         with open(image_temp_file, "wb") as t:
+#             t.write(image_file.file.read())
+#         image: Image = from_image_file(image_temp_file, survey_id=survey_id)
+#         image_repo.save(image)
+#         storage.export_to_storage(image, image_temp_file)
+#         return image
 
 
-@app.post(
-    "/images",
-)
-def create_image(
-        image_file: Annotated[UploadFile, File()],
-        survey_id: Annotated[str, Form()],
-        valid_api_key: str = Depends(valid_api_key),
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> Image:
-    logger.debug("Got file: %s", image_file.filename)
-    with image_repo.storage() as storage:
-        image_temp_file = os.path.join(storage.temp_dir, image_file.filename)
-        with open(image_temp_file, "wb") as t:
-            t.write(image_file.file.read())
-        image: Image = from_image_file(image_temp_file, survey_id=survey_id)
-        image_repo.save(image)
-        storage.export_to_storage(image, image_temp_file)
-        return image
+# def from_image_file(image_file_path, survey_id, image_id=None):
+#     if os.path.exists(image_file_path):
+#         image_name = os.path.basename(image_file_path)
+#         with PIL.Image.open(image_file_path) as image:
+#             width, height = image.size
+#             return Image(
+#                 id=(image_id or str(uuid.uuid4())),
+#                 image_name=image_name,
+#                 survey_id=survey_id,
+#                 width=width,
+#                 height=height,
+#             )
+
+# @app.get(
+#     "/images/{image_id}",
+# )
+# def get_image(
+#         image_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         image_repo: ImageRepository = Depends(get_image_repo),
+# ) -> Image:
+#     image: Image = image_repo.find(image_id)
+#     return image
 
 
-def from_image_file(image_file_path, survey_id, image_id=None):
-    if os.path.exists(image_file_path):
-        image_name = os.path.basename(image_file_path)
-        with PIL.Image.open(image_file_path) as image:
-            width, height = image.size
-            return Image(
-                id=(image_id or str(uuid.uuid4())),
-                image_name=image_name,
-                survey_id=survey_id,
-                width=width,
-                height=height,
-            )
-
-@app.get(
-    "/images/{image_id}",
-)
-def get_image(
-        image_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> Image:
-    image: Image = image_repo.find(image_id)
-    return image
+# @app.get(
+#     "/images/{image_id}/jpeg",
+# )
+# def get_image_jpeg(
+#         image_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         image_repo: ImageRepository = Depends(get_image_repo),
+# ) -> Image:
+#     image: Image = image_repo.find(image_id)
+#     image_repo.download_file(image, image.file_name)
+#     with image_repo.storage() as storage:
+#         image_bytes: BytesIO = storage.import_bytes_from_storage(image)
+#         return Response(image_bytes.getvalue(), media_type="image/jpg")
 
 
-@app.get(
-    "/images/{image_id}/jpeg",
-)
-def get_image_jpeg(
-        image_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> Image:
-    image: Image = image_repo.find(image_id)
-    image_repo.download_file(image, image.file_name)
-    with image_repo.storage() as storage:
-        image_bytes: BytesIO = storage.import_bytes_from_storage(image)
-        return Response(image_bytes.getvalue(), media_type="image/jpg")
+# @app.get(
+#     "/images/{image_id}/points",
+# )
+# def get_image_points(
+#         image_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         point_repository: PointRepository = Depends(get_point_repo),
+# ) -> List[Point]:
+#     points: List[Point] = point_repository.find_image_points(image_id)
+#     return points
 
 
-@app.get(
-    "/images/{image_id}/points",
-)
-def get_image_points(
-        image_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        point_repository: PointRepository = Depends(get_point_repo),
-) -> List[Point]:
-    points: List[Point] = point_repository.find_image_points(image_id)
-    return points
-
-
-@app.get(
-    "/projects/{project_name}/surveys",
-)
-def get_project_surveys(
-        project_name: str,
-        valid_api_key: str = Depends(valid_api_key),
-        survey_repository: SurveyRepository = Depends(get_survey_repo),
-) -> List[Survey]:
-    surveys: List[Survey] = survey_repository.find_project_surveys(project_name)
-    return surveys
-
-
-@app.get(
-    "/surveys/{survey_id}",
-)
-def get_survey(
-        survey_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        survey_repo: SurveyRepository = Depends(get_survey_repo),
-) -> Survey:
-    survey: Survey = survey_repo.find(survey_id)
-    return survey
-
-
-@app.get(
-    "/points/{point_id}",
-)
-def get_survey(
-        point_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        point_repo: PointRepository = Depends(get_point_repo),
-) -> Point:
-    point: Point = point_repo.find(point_id)
-    return point
-
-
-@app.get(
-    "/surveys/{survey_id}/images",
-)
-def get_images_for_survey(
-        survey_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> List[Image]:
-    images: List[Image] = image_repo.find_survey_images(survey_id)
-    return images
+# @app.get(
+#     "/projects/{project_name}/surveys",
+# )
+# def get_project_surveys(
+#         project_name: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         survey_repository: SurveyRepository = Depends(get_survey_repo),
+# ) -> List[Survey]:
+#     surveys: List[Survey] = survey_repository.find_project_surveys(project_name)
+#     return surveys
+#
+#
+# @app.get(
+#     "/surveys/{survey_id}",
+# )
+# def get_survey(
+#         survey_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         survey_repo: SurveyRepository = Depends(get_survey_repo),
+# ) -> Survey:
+#     survey: Survey = survey_repo.find(survey_id)
+#     return survey
+#
+#
+# @app.get(
+#     "/points/{point_id}",
+# )
+# def get_survey(
+#         point_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         point_repo: PointRepository = Depends(get_point_repo),
+# ) -> Point:
+#     point: Point = point_repo.find(point_id)
+#     return point
+#
+#
+# @app.get(
+#     "/surveys/{survey_id}/images",
+# )
+# def get_images_for_survey(
+#         survey_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         image_repo: ImageRepository = Depends(get_image_repo),
+# ) -> List[Image]:
+#     images: List[Image] = image_repo.find_survey_images(survey_id)
+#     return images
 
 # @app.post("/work")
 # def create_work_item(
@@ -342,96 +304,96 @@ def get_images_for_survey(
 #     return Response(png_bytes.getvalue(), media_type="image/png")
 
 
-@app.get("/segments/{segment_id}/mask")
-def get_segment_mask2(
-        segment_id: str,
-        include_image: Optional[str] = "false",
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repository: SegmentRepository = Depends(get_segment_repo),
-        image_repository: ImageRepository = Depends(get_image_repo),
-):
-    segment: Segment = segment_repository.find(segment_id)
-    image: Image = image_repository.find(segment.image_id)
-    with image_repository.storage() as image_store:
-        image_file = image_store.import_from_storage(image)
-        shutil.copy(image_file, "C:\\Users\\jlsheeha\\Pictures\\original.jpg")
-        with PIL.Image.open(image_file) as pil_image:
-            logger.debug(f"Image size: {pil_image}")
-            with segment_repository.storage() as segment_store:
-                coords = segment_store.import_from_storage(segment)
-                masked_pil_image = add_mask(pil_image, coords)
-                masked_pil_image_bytes = BytesIO()
-                masked_pil_image.save(masked_pil_image_bytes, format="PNG")
-                return Response(masked_pil_image_bytes.getvalue(), media_type="image/png")
-
-
-@app.get("/points/{point_id}/patch")
-def get_patch(
-        point_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        point_repository: PointRepository = Depends(get_point_repo),
-        image_repository: ImageRepository = Depends(get_image_repo),
-):
-    point: Point = point_repository.find(point_id)
-    image: Image = image_repository.find(point.image_id)
-    with image_repository.storage() as image_store:
-        image_file = image_store.import_from_storage(image)
-        shutil.copy(image_file, f"C:\\Users\\jlsheeha\\Pictures\\{image.image_name}.jpg")
-        # with PIL.Image.open(image_file) as pil_image:
-        #     logger.debug(f"Image size: {pil_image}")
-        patch = load_image_and_crop(image_file, point.coordinate[0], point.coordinate[1])
-        patch_bytes = BytesIO()
-        patch.save(patch_bytes, format="JPEG")
-        return Response(patch_bytes.getvalue(), media_type="image/jpeg")
-
-
-@app.get("/images/{image_id}/mask")
-def get_segment_mask2(
-        image_id: str,
-        include_image: Optional[str] = "false",
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repository: SegmentRepository = Depends(get_segment_repo),
-        image_repository: ImageRepository = Depends(get_image_repo),
-):
-    image: Image = image_repository.find(image_id)
-    segments: List[Segment] = segment_repository.find_image_segments(image_id)
-    with image_repository.storage() as image_store:
-        image_file = image_store.import_from_storage(image)
-        shutil.copy(image_file, "C:\\Users\\jlsheeha\\Pictures\\original.jpg")
-        with PIL.Image.open(image_file) as pil_image:
-            logger.debug(f"Image size: {pil_image}")
-            masked_pil_image = pil_image.copy()
-            for segment in segments:
-                with segment_repository.storage() as segment_store:
-                    coords = segment_store.import_from_storage(segment)
-                    masked_pil_image = add_mask(masked_pil_image, coords)
-            masked_pil_image_bytes = BytesIO()
-            masked_pil_image.save(masked_pil_image_bytes, format="PNG")
-            return Response(masked_pil_image_bytes.getvalue(), media_type="image/png")
-
-            # mask_array = numpy.zeros((image.width, image.height), dtype=int)
-            # mask_array[coords] = 1
-            # mask_image = PIL.Image.fromarray(mask_array, mode='LA')
-            # mask_image.save("C:\\Users\\jlsheeha\\Pictures\\mask.png")
-            # mask_image = mask_image.convert('RGBA')
-            # logger.debug(f"Mask Image size: {mask_image}")
-            # blank = pil_image.point(lambda _: 0)
-            # composite_image = PIL.Image.composite(pil_image, blank, mask_image)
-            # # composite_image = PIL.Image.blend(pil_image, mask_image, 0.5)
-            # composite_bytes = BytesIO()
-            # composite_image.save(composite_bytes, format="PNG")
-            # # composite_image = PIL.Image.composite(pil_image, mask_image, None)
-            # return Response(composite_bytes.getvalue(), media_type="image/png")
-
-    # mask_image = np.ones((image.width, image.height, 4))
-    # mask_image[:, :, 3] = 0
-    # color_mask = np.concatenate([np.random.random(3), [0.35]])
-    # logger.debug("CCCCCC")
-    # mask_image[mask_array] = color_mask
-    #
-    # masked_image = cv2.addWeighted(cv2_image, 0.5, mask_image, 0.5, 0)
-    # _, png_image = cv2.imencode(".png", masked_image)
-    # return Response(png_image, media_type="image/png")
+# @app.get("/segments/{segment_id}/mask")
+# def get_segment_mask2(
+#         segment_id: str,
+#         include_image: Optional[str] = "false",
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repository: SegmentRepository = Depends(get_segment_repo),
+#         image_repository: ImageRepository = Depends(get_image_repo),
+# ):
+#     segment: Segment = segment_repository.find(segment_id)
+#     image: Image = image_repository.find(segment.image_id)
+#     with image_repository.storage() as image_store:
+#         image_file = image_store.import_from_storage(image)
+#         shutil.copy(image_file, "C:\\Users\\jlsheeha\\Pictures\\original.jpg")
+#         with PIL.Image.open(image_file) as pil_image:
+#             logger.debug(f"Image size: {pil_image}")
+#             with segment_repository.storage() as segment_store:
+#                 coords = segment_store.import_from_storage(segment)
+#                 masked_pil_image = add_mask(pil_image, coords)
+#                 masked_pil_image_bytes = BytesIO()
+#                 masked_pil_image.save(masked_pil_image_bytes, format="PNG")
+#                 return Response(masked_pil_image_bytes.getvalue(), media_type="image/png")
+#
+#
+# @app.get("/points/{point_id}/patch")
+# def get_patch(
+#         point_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         point_repository: PointRepository = Depends(get_point_repo),
+#         image_repository: ImageRepository = Depends(get_image_repo),
+# ):
+#     point: Point = point_repository.find(point_id)
+#     image: Image = image_repository.find(point.image_id)
+#     with image_repository.storage() as image_store:
+#         image_file = image_store.import_from_storage(image)
+#         shutil.copy(image_file, f"C:\\Users\\jlsheeha\\Pictures\\{image.image_name}.jpg")
+#         # with PIL.Image.open(image_file) as pil_image:
+#         #     logger.debug(f"Image size: {pil_image}")
+#         patch = load_image_and_crop(image_file, point.coordinate[0], point.coordinate[1])
+#         patch_bytes = BytesIO()
+#         patch.save(patch_bytes, format="JPEG")
+#         return Response(patch_bytes.getvalue(), media_type="image/jpeg")
+#
+#
+# @app.get("/images/{image_id}/mask")
+# def get_segment_mask2(
+#         image_id: str,
+#         include_image: Optional[str] = "false",
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repository: SegmentRepository = Depends(get_segment_repo),
+#         image_repository: ImageRepository = Depends(get_image_repo),
+# ):
+#     image: Image = image_repository.find(image_id)
+#     segments: List[Segment] = segment_repository.find_image_segments(image_id)
+#     with image_repository.storage() as image_store:
+#         image_file = image_store.import_from_storage(image)
+#         shutil.copy(image_file, "C:\\Users\\jlsheeha\\Pictures\\original.jpg")
+#         with PIL.Image.open(image_file) as pil_image:
+#             logger.debug(f"Image size: {pil_image}")
+#             masked_pil_image = pil_image.copy()
+#             for segment in segments:
+#                 with segment_repository.storage() as segment_store:
+#                     coords = segment_store.import_from_storage(segment)
+#                     masked_pil_image = add_mask(masked_pil_image, coords)
+#             masked_pil_image_bytes = BytesIO()
+#             masked_pil_image.save(masked_pil_image_bytes, format="PNG")
+#             return Response(masked_pil_image_bytes.getvalue(), media_type="image/png")
+#
+#             # mask_array = numpy.zeros((image.width, image.height), dtype=int)
+#             # mask_array[coords] = 1
+#             # mask_image = PIL.Image.fromarray(mask_array, mode='LA')
+#             # mask_image.save("C:\\Users\\jlsheeha\\Pictures\\mask.png")
+#             # mask_image = mask_image.convert('RGBA')
+#             # logger.debug(f"Mask Image size: {mask_image}")
+#             # blank = pil_image.point(lambda _: 0)
+#             # composite_image = PIL.Image.composite(pil_image, blank, mask_image)
+#             # # composite_image = PIL.Image.blend(pil_image, mask_image, 0.5)
+#             # composite_bytes = BytesIO()
+#             # composite_image.save(composite_bytes, format="PNG")
+#             # # composite_image = PIL.Image.composite(pil_image, mask_image, None)
+#             # return Response(composite_bytes.getvalue(), media_type="image/png")
+#
+#     # mask_image = np.ones((image.width, image.height, 4))
+#     # mask_image[:, :, 3] = 0
+#     # color_mask = np.concatenate([np.random.random(3), [0.35]])
+#     # logger.debug("CCCCCC")
+#     # mask_image[mask_array] = color_mask
+#     #
+#     # masked_image = cv2.addWeighted(cv2_image, 0.5, mask_image, 0.5, 0)
+#     # _, png_image = cv2.imencode(".png", masked_image)
+#     # return Response(png_image, media_type="image/png")
 
 
 # @app.post(
@@ -464,28 +426,28 @@ def get_segment_mask2(
 #         return SegmentAnythingListResponse(segments)
 
 
-@app.get("/segments/{segment_id}")
-def get_segment(
-        segment_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repo: SegmentRepository = Depends(get_segment_repo),
-):
-    logger.debug("Getting segment: %s", segment_id)
-    segment = segment_repo.find(segment_id)
-    return segment
-
-
-@app.get("/images/{image_id}/segments")
-def get_image_segments(
-        image_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        segment_repo: SegmentRepository = Depends(get_segment_repo),
-):
-    logger.debug("Getting segments for image: %s", image_id)
-    segments: List[Segment] = segment_repo.find_image_segments(image_id)
-    return segments
-
-handler = Mangum(app)
+# @app.get("/segments/{segment_id}")
+# def get_segment(
+#         segment_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repo: SegmentRepository = Depends(get_segment_repo),
+# ):
+#     logger.debug("Getting segment: %s", segment_id)
+#     segment = segment_repo.find(segment_id)
+#     return segment
+#
+#
+# @app.get("/images/{image_id}/segments")
+# def get_image_segments(
+#         image_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         segment_repo: SegmentRepository = Depends(get_segment_repo),
+# ):
+#     logger.debug("Getting segments for image: %s", image_id)
+#     segments: List[Segment] = segment_repo.find_image_segments(image_id)
+#     return segments
+#
+# handler = Mangum(app)
 
 # @app.get("/images/{image_name}/sample-points")
 # def sample_points(
@@ -512,31 +474,31 @@ handler = Mangum(app)
 #     return segments
 
 
-@app.get("/surveys/{survey_id}")
-def get_segment(
-        survey_id: str,
-        valid_api_key: str = Depends(valid_api_key),
-        survey_repo: SurveyRepository = Depends(get_survey_repo),
-):
-    logger.debug("Getting survey: %s", survey_id)
-    survey: Survey = survey_repo.find(survey_id)
-    return survey
-
-
-@app.post("/surveys")
-def create_survey(
-        survey_request: dict,
-        valid_api_key: str = Depends(valid_api_key),
-        survey_repo: SurveyRepository = Depends(get_survey_repo),
-):
-    survey_data = survey_request.copy()
-    if "survey_date" not in survey_data:
-        survey_data["survey_date"] = datetime.now()
-    if "survey_name" not in survey_data:
-        survey_data["survey_name"] = f"Survey {survey_data['project_name']} on {survey_data['survey_date']}"
-    survey: Survey = Survey(id = str(uuid.uuid4()), **survey_data)
-    survey_repo.save(survey)
-    return survey
+# @app.get("/surveys/{survey_id}")
+# def get_segment(
+#         survey_id: str,
+#         valid_api_key: str = Depends(valid_api_key),
+#         survey_repo: SurveyRepository = Depends(get_survey_repo),
+# ):
+#     logger.debug("Getting survey: %s", survey_id)
+#     survey: Survey = survey_repo.find(survey_id)
+#     return survey
+#
+#
+# @app.post("/surveys")
+# def create_survey(
+#         survey_request: dict,
+#         valid_api_key: str = Depends(valid_api_key),
+#         survey_repo: SurveyRepository = Depends(get_survey_repo),
+# ):
+#     survey_data = survey_request.copy()
+#     if "survey_date" not in survey_data:
+#         survey_data["survey_date"] = datetime.now()
+#     if "survey_name" not in survey_data:
+#         survey_data["survey_name"] = f"Survey {survey_data['project_name']} on {survey_data['survey_date']}"
+#     survey: Survey = Survey(id = str(uuid.uuid4()), **survey_data)
+#     survey_repo.save(survey)
+#     return survey
 
 
 @app.get("/healthcheck")
