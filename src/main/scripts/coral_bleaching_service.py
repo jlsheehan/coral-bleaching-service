@@ -6,7 +6,8 @@ import os
 # import matplotlib.pyplot as plt
 from fastapi import FastAPI
 
-from coral_bleaching_endpoint import images, points, segments, surveys
+import coral_bleaching_endpoint
+from coral_bleaching_endpoint import images, points, segments, surveys, work
 
 TRUE_STRINGS = ["true", "TRUE", "True", "yes", "YES", "Yes", "1"]
 CORAL_BLEACHING_DATA_BUCKET = os.getenv(
@@ -31,7 +32,7 @@ app.include_router(images.router)
 app.include_router(points.router)
 app.include_router(segments.router)
 app.include_router(surveys.router)
-
+app.include_router(work.router)
 # def valid_api_key(api_key: str = Depends(api_key_header)):
 #     if api_key in API_KEYS:
 #         return True
