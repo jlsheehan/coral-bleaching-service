@@ -1,4 +1,6 @@
 #   -*- coding: utf-8 -*-
+import glob
+import os
 import shutil
 
 from pybuilder.core import use_plugin, init, Project, Logger, task
@@ -10,7 +12,8 @@ use_plugin("python.distutils")
 
 name = "coral-bleaching-service"
 default_task = "publish"
-version="0.8.0"
+version = "1.0.0"
+
 
 @init
 def set_properties(project: Project):
@@ -19,9 +22,15 @@ def set_properties(project: Project):
 
 @task
 def copy_package(project: Project, logger: Logger):
-    shutil.copy(
-        project.expand_path(
-            f"$dir_dist/dist/coral_bleaching_service-{version}-py3-none-any.whl"
-        ),
-        f"/Users/jeffreysheehan/Development/packages/coral_bleaching_service-{version}-py3-none-any.whl",
-    )
+    dir_dist = os.path.join(project.expand_path("$dir_dist"), "dist")
+    user_home = os.path.expanduser("~")
+    packages_dir = os.path.join(user_home, "Development", "packages")
+    files = glob.glob(f"{dir_dist}/*.whl")
+    if len(files) == 1:
+        logger.info("Copying package %s", files[0])
+        shutil.copy(
+            files[0],
+            packages_dir,
+        )
+    else:
+        logger.error("No file found to copy")
