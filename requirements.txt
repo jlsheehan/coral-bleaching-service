@@ -1,4 +1,4 @@
-coral-bleaching-common>=1.0.11
+coral-bleaching-common>=1.0.12
 coral-bleaching-imageutils>=0.2.0
 fastapi==0.103.2
 python-multipart==0.0.9

@@ -10,12 +10,9 @@ from mypy_boto3_sqs import SQSClient
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-SEGMENTATION_QUEUE_NAME = os.getenv('SEGMENTATION_QUEUE', "segmentation_queue")
-CLASSIFICATION_QUEUE_NAME = os.getenv('CLASSIFICATION_QUEUE', "classification_queue")
-
 sqs: SQSClient = boto3.client("sqs", region_name="ap-southeast-2")
-CLASSIFICATION_QUEUE_URL = sqs.get_queue_url(QueueName=CLASSIFICATION_QUEUE_NAME)["QueueUrl"]
-SEGMENTATION_QUEUE_URL = sqs.get_queue_url(QueueName=SEGMENTATION_QUEUE_NAME)["QueueUrl"]
+CLASSIFICATION_QUEUE_URL = os.getenv("CLASSIFICATION_QUEUE")
+SEGMENTATION_QUEUE_URL = os.getenv("SEGMENTATION_QUEUE")
 
 @router.post(
     "/work",

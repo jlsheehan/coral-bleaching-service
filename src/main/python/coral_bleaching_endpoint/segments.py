@@ -45,3 +45,14 @@ def get_segment(
     logger.debug("Getting segment: %s", segment_id)
     segment = segment_repo.find(segment_id)
     return segment
+
+
+@router.get("/segments/{segment_id}/coords")
+def get_segment_coords(
+        segment_id: str,
+        segment_repo: SegmentRepository = Depends(get_segment_repo),
+):
+    logger.debug("Getting segment: %s", segment_id)
+    with segment_repo.storage() as segment_store:
+        coords = segment_store.import_from_storage(segment_id)
+        return coords

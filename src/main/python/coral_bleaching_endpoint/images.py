@@ -68,7 +68,6 @@ def get_image_jpeg(
         image_repo: ImageRepository = Depends(get_image_repo),
 ) -> Response:
     image: Image = image_repo.find(image_id)
-    image_repo.download_file(image, image.file_name)
     with image_repo.storage() as storage:
         image_bytes: BytesIO = storage.import_bytes_from_storage(image)
         return Response(image_bytes.getvalue(), media_type="image/jpeg")
