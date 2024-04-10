@@ -53,6 +53,7 @@ def get_segment_coords(
         segment_repo: SegmentRepository = Depends(get_segment_repo),
 ):
     logger.debug("Getting segment: %s", segment_id)
+    segment: Segment = segment_repo.find(segment_id)
     with segment_repo.storage() as segment_store:
-        coords = segment_store.import_from_storage(segment_id)
+        coords = segment_store.import_from_storage(segment)
         return coords
