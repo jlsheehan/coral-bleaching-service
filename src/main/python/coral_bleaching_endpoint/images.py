@@ -1,53 +1,29 @@
 import logging
-import os
-# import shutil
 import uuid
 from io import BytesIO
-from typing import Annotated, List, Optional
+from typing import List, Optional
 
 from PIL import Image as PILImage
 from coral_bleaching_common import Image, Point, Segment
 from coral_bleaching_db import ImageRepository, get_image_repo, PointRepository, get_point_repo, SegmentRepository, \
     get_segment_repo
-from fastapi import APIRouter, UploadFile, Depends, Form, File, Response
-
 from coral_bleaching_image import add_mask
+from fastapi import APIRouter, Depends, Response, Request
+from fastapi.responses import RedirectResponse, JSONResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post(
-    "/images",
-)
-def create_image(
-        image_file: Annotated[UploadFile, File()],
-        survey_id: Annotated[str, Form()],
-        image_repo: ImageRepository = Depends(get_image_repo),
-) -> Image:
-    logger.debug("Got file: %s", image_file.filename)
-    with image_repo.storage() as storage:
-        image_temp_file = os.path.join(storage.temp_dir, image_file.filename)
-        with open(image_temp_file, "wb") as t:
-            t.write(image_file.file.read())
-        image: Image = from_image_file(image_temp_file, survey_id=survey_id)
-        image_repo.save(image)
-        storage.export_to_storage(image, image_temp_file)
-        return image
+@router.post("/images", response_model=Image)
+def create_image(image: Image, image_repo: ImageRepository = Depends(get_image_repo)) -> Image:
+    logger.debug("Received image %s", image)
+    new_image = image.copy()
+    if new_image.id is None:
+        new_image.id = str(uuid.uuid4())
+    image_repo.save(new_image)
+    return new_image
 
-
-def from_image_file(image_file_path, survey_id, image_id=None):
-    if os.path.exists(image_file_path):
-        image_name = os.path.basename(image_file_path)
-        with PILImage.open(image_file_path) as image:
-            width, height = image.size
-            return Image(
-                id=(image_id or str(uuid.uuid4())),
-                image_name=image_name,
-                survey_id=survey_id,
-                width=width,
-                height=height,
-            )
 
 @router.get(
     "/images/{image_id}",
@@ -60,6 +36,20 @@ def get_image(
     return image
 
 
+@router.post(
+    "/images/{image_id}/jpeg",
+)
+def upload_image_jpeg(
+        image_id: str,
+        image_repo: ImageRepository = Depends(get_image_repo),
+) -> dict:
+    image: Image = image_repo.find(image_id)
+    logger.debug("Uploading image: %s", image.id)
+    redirect_url: dict = image_repo.upload_url(image)
+    logger.debug(redirect_url)
+    return redirect_url
+
+
 @router.get(
     "/images/{image_id}/jpeg",
 )
@@ -68,9 +58,7 @@ def get_image_jpeg(
         image_repo: ImageRepository = Depends(get_image_repo),
 ) -> Response:
     image: Image = image_repo.find(image_id)
-    with image_repo.storage() as storage:
-        image_bytes: BytesIO = storage.import_bytes_from_storage(image)
-        return Response(image_bytes.getvalue(), media_type="image/jpeg")
+    return RedirectResponse(image_repo.download_url(image))
 
 
 @router.get(

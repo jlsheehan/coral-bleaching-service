@@ -7,6 +7,7 @@ from coral_bleaching_common import Image, Segment
 from coral_bleaching_db import ImageRepository, get_image_repo, SegmentRepository, \
     get_segment_repo
 from fastapi import APIRouter, Depends, Response
+from fastapi.responses import RedirectResponse
 
 from coral_bleaching_image import add_mask
 
@@ -51,9 +52,7 @@ def get_segment(
 def get_segment_coords(
         segment_id: str,
         segment_repo: SegmentRepository = Depends(get_segment_repo),
-):
+) -> Response:
     logger.debug("Getting segment: %s", segment_id)
     segment: Segment = segment_repo.find(segment_id)
-    with segment_repo.storage() as segment_store:
-        coords = segment_store.import_from_storage(segment)
-        return coords
+    return RedirectResponse(segment_repo.download_url(segment))
