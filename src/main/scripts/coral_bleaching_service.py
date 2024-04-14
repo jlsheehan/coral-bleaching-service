@@ -11,7 +11,7 @@ from coral_bleaching_endpoint import images, points, segments, surveys, work
 
 TRUE_STRINGS = ["true", "TRUE", "True", "yes", "YES", "Yes", "1"]
 CORAL_BLEACHING_DATA_BUCKET = os.getenv(
-    "CORAL_BLEACHING_BUCKET", "coral-bleaching-data"
+    "CORAL_BLEACHING_BUCKET", "coral-bleaching-data-bucket"
 )
 DEBUG = os.getenv("DEBUG", "TRUE") == "TRUE"
 LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
