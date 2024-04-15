@@ -12,12 +12,17 @@ use_plugin("python.distutils")
 
 name = "coral-bleaching-service"
 default_task = "publish"
-version = "1.0.9"
+version = "1.0.10"
 
 
 @init
 def set_properties(project: Project):
     project.depends_on_requirements("requirements.txt")
+    if project.get_property("distutils_upload_repository", None) is None:
+        project.set_property(
+            "distutils_upload_repository",
+            "https://nexus.aims.gov.au/repository/pypi-internal/",
+        )
 
 
 @task
@@ -34,3 +39,5 @@ def copy_package(project: Project, logger: Logger):
         )
     else:
         logger.error("No file found to copy")
+
+
