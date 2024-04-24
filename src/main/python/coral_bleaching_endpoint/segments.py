@@ -1,11 +1,11 @@
 import logging
 from io import BytesIO
-from typing import Optional
+from typing import Optional, List
 
 from PIL import Image as PILImage
-from coral_bleaching_common import Image, Segment
+from coral_bleaching_common import Image, Segment, Point
 from coral_bleaching_db import ImageRepository, get_image_repo, SegmentRepository, \
-    get_segment_repo
+    get_segment_repo, PointRepository, get_point_repo
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import RedirectResponse
 
@@ -56,3 +56,14 @@ def get_segment_coords(
     logger.debug("Getting segment: %s", segment_id)
     segment: Segment = segment_repo.find(segment_id)
     return RedirectResponse(segment_repo.download_url(segment))
+
+
+@router.get(
+    "/segments/{segment_id}/points",
+)
+def get_image_points(
+        segment_id: str,
+        point_repository: PointRepository = Depends(get_point_repo),
+) -> List[Point]:
+    points: List[Point] = point_repository.find_segment_points(segment_id)
+    return points
