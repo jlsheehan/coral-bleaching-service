@@ -23,17 +23,6 @@ def get_survey_images(
 
 
 @router.get(
-    "/projects/{project_name}/surveys",
-)
-def get_project_surveys(
-        project_name: str,
-        survey_repository: SurveyRepository = Depends(get_survey_repo),
-) -> List[Survey]:
-    surveys: List[Survey] = survey_repository.find_project_surveys(project_name)
-    return surveys
-
-
-@router.get(
     "/surveys/{survey_id}",
 )
 def get_survey(
@@ -42,6 +31,7 @@ def get_survey(
 ) -> Survey:
     survey: Survey = survey_repo.find(survey_id)
     return survey
+
 
 @router.get(
     "/surveys/{survey_id}/images",
@@ -77,3 +67,25 @@ def create_survey(
     survey: Survey = Survey(id = str(uuid.uuid4()), **survey_data)
     survey_repo.save(survey)
     return survey
+
+
+@router.get(
+    "/projects/{project_name}/surveys",
+)
+def get_project_surveys(
+        project_name: str,
+        survey_repository: SurveyRepository = Depends(get_survey_repo),
+) -> List[Survey]:
+    surveys: List[Survey] = survey_repository.find_project_surveys(project_name)
+    return surveys
+
+
+@router.get(
+    "/projects",
+)
+def get_surveys(
+        survey_repository: SurveyRepository = Depends(get_survey_repo),
+) -> List[str]:
+    project_names = survey_repository.project_names()
+    logger.debug(project_names)
+    return project_names

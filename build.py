@@ -12,7 +12,7 @@ use_plugin("python.distutils")
 
 name = "coral-bleaching-service"
 default_task = "publish"
-version = "1.0.11"
+version = "1.0.12"
 
 
 @init
